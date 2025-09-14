@@ -9,10 +9,26 @@ typedef struct Book {
     int id;
     char title[50];
     char author[50];
+    int isBorrowed;
     struct Book *right;
     struct Book *left;
 } Book;
-
+typedef struct BookNode {
+    Book *book;
+    struct BookNode *next;
+} BookNode;
+typedef struct User{
+    int id;
+    char name[50];
+    struct User *next;
+    struct User *prev;
+    BookNode *borrowedHead;
+    BookNode *borrowedTail;
+} User;
+typedef struct List{
+    User *head;
+    User *tail;
+}List;
 
 //random ID generator
 int usedIDs[MAX_IDS];
@@ -44,6 +60,7 @@ Book *creatBook(char *title, char *author, int id){
         book->id = id;
         strcpy(book->title, title);
         strcpy(book->author, author);
+        book->isBorrowed = 0;
         book->left = book->right = NULL;
     }
     return book;
@@ -74,7 +91,7 @@ Book *minID(Book *head){
 void inorder(Book *head){
     if (head == NULL) return;
     inorder(head->left);
-    printf("Id: %d, %s By %s\n", head->id, head->title, head->author);
+    if (head->isBorrowed == 0) printf("Id: %d, %s By %s\n", head->id, head->title, head->author);
     inorder(head->right);
 
 }
@@ -124,31 +141,18 @@ Book *removeBook(Book *head, int id){
     return head;
 }
 //search Book by id
-void searchBook(Book *head, int id){
+Book *searchBookByID(Book *head, int id){
     if (head == NULL){
         printf("Book Not Found!!\n");
-        return;
+        return NULL;
     }
-    if (id > head->id) searchBook(head->right, id);
-    else if (id < head->id) searchBook(head->left, id);
-    else{
-        printf("Id: %d, %s By %s\n", head->id, head->title, head->author);
-        return;
-    }
+    if (id > head->id) head = searchBookByID(head->right, id);
+    else if (id < head->id) head = searchBookByID(head->left, id);
+    return head;
 }
 
 
 //user management system
-typedef struct User{
-    int id;
-    char name[50];
-    struct User *next;
-    struct User *prev;
-} User;
-typedef struct List{
-    User *head;
-    User *tail;
-}List;
 //register a user
 User *createUser(char *name){
     User *user = (User *)malloc(sizeof(User));
@@ -156,6 +160,7 @@ User *createUser(char *name){
         user->id = ID++;
         strcpy(user->name, name);
         user->next = user->prev = NULL;
+        user->borrowedHead = user->borrowedTail = NULL;
     }
     return user;
 }
@@ -179,7 +184,7 @@ void deletUser(List *list, int id){
 
     User *current = list->head;
     while (current != NULL){
-        if (current->id == id){ add l
+        if (current->id == id){
             //element in hed
             if (current == list->head){
                 list->head = list->head->next;
@@ -207,21 +212,20 @@ void deletUser(List *list, int id){
     return;
 }
 //searche users BY id
-void searchUserByID(List *list, int id){
+User *searchUserByID(List *list, int id){
     if (list->head == NULL){
         printf("list empty!!\n");
-        return;
+        return NULL;
     }
     User *current = list->head;
     while (current != NULL){
         if (current->id == id){
-            printf("ID: %d, %s\n", current->id, current->name);
-            return;
+            return current;
         }
         current = current->next;
     }
     printf("User not Found!!\n");
-    return;
+    return NULL;
 }
 //display all users
 void displayUsers(List *list){
@@ -236,6 +240,34 @@ void displayUsers(List *list){
     }
     return;
 }
+//borrow system management
+
+void borrowBook(User *user, Book *book){
+    BookNode *node = (BookNode *)malloc(sizeof(BookNode));
+    node->book = book;
+    node->next = NULL;
+    if (user->borrowedHead == NULL){
+        user->borrowedHead = user->borrowedTail = node; //queen empty
+    }
+    else {
+        user->borrowedTail->next = node;
+        user->borrowedTail = node;
+    }
+}
+Book *returnBook(User *user){
+    if (user->borrowedHead == NULL){ //quene empty
+        printf("user didn't borrow any book\n");
+        return NULL;
+    }
+    BookNode *temp = user->borrowedHead;
+    Book *book = temp->book;
+    user->borrowedHead = temp->next;
+    if (user->borrowedHead == NULL) user->borrowedTail = NULL; //quene is empty
+    free(temp);
+    return book;
+}
+
+
 
 int main(){
     Book *Books = NULL;
@@ -244,9 +276,8 @@ int main(){
     printf("========= Library Menu ==============\n");
     printf("1. Add Book\n2. Delete Book\n3. Search Book\n4. Register User\n5. Borrow Book\n6. Return Book\n7. Show All Books\n8. Undo Last Operation\n0. Exit\n");
     while (1){
-        int option;
+        int option, id, bookID, userID;
         char title[50], author[50], name[50];
-        int id;
         printf("->: ");
         scanf("%d", &option);
         switch (option) {
@@ -265,7 +296,7 @@ int main(){
             case 3:
                 printf("Enter Book ID: ");
                 scanf("%d", &id);
-                searchBook(Books, id);
+                searchBookByID(Books, id);
                 break;
             case 4:
                 printf("Enter User name: ");
@@ -273,21 +304,35 @@ int main(){
                 registerUser(&list, name);
                 break;
             case 5:
-                printf("enter Id: ");
-                scanf("%d", &id);
-                deletUser(&list, id);
+                printf("Enter User ID: ");
+                scanf("%d", &userID);
+                printf("Enter Book ID: ");
+                scanf("%d", &bookID);
+                Book *book = searchBookByID(Books, bookID);
+                if (book != NULL){
+                    if (book->isBorrowed == 1){
+                        printf("Book already Borrowed!!\n");
+                    }
+                    else{
+                        book->isBorrowed = 1;
+                        borrowBook(searchUserByID(&list, userID), book);
+                    }
+                }
                 break;
             case 6:
-                displayUsers(&list);
+                printf("Enter User ID: ");
+                scanf("%d", &userID);
+                book = returnBook(searchUserByID(&list, userID));
+                if (book != NULL){
+                    book->isBorrowed = 0;
+                }
                 break;
             case 7:
                 if (Books == NULL) printf("Library is empty!!\n");
                 inorder(Books);
                 break;
             case 8:
-                printf("enter Id: ");
-                scanf("%d", &id);
-                searchUserByID(&list, id);
+                displayUsers(&list);
                 break;
             case 0:
                 exit(0);
